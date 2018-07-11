@@ -1,14 +1,15 @@
 'use strict'
 const path = require('path')
 const utils = require('./utils')
-const config = require('../config')
+const config = require('../config/index')
 const vueLoaderConfig = require('./vue-loader.conf')
+const HtmlWebpackPlugin = require('html-webpack-plugin')
 
-function resolve (dir) {
+function resolve(dir) {
   return path.join(__dirname, '..', dir)
 }
 
-{{#lint}}const createLintingRule = () => ({
+const createLintingRule = () => ({
   test: /\.(js|vue)$/,
   loader: 'eslint-loader',
   enforce: 'pre',
@@ -17,13 +18,46 @@ function resolve (dir) {
     formatter: require('eslint-friendly-formatter'),
     emitWarning: !config.dev.showEslintErrorsInOverlay
   }
-}){{/lint}}
+})
+
+
+
+//遍历模块
+const glob = require('glob')
+
+const entries = {}
+const chunks = []
+const htmlWebpackPluginArray = []
+glob.sync('./src/pages/**/index.js').forEach(function (path) {
+  const chunk = path.split('./src/pages/')[1].split('/index.js')[0]
+  entries[chunk] = path
+  chunks.push(chunk)
+  const filename = chunk + '.html'
+  const htmlConf = {
+    title: chunk,
+    filename: filename,
+    template: 'src/layout/layout.html',
+    inject: 'body',
+    hash: false,
+    chunks: [chunk, 'manifest', 'vendor', 'app'],
+    minify: {
+      removeComments: true,
+      collapseWhitespace: true,
+      removeAttributeQuotes: true,
+      minifyJS: true
+    },
+    chunksSortMode: 'dependency'
+  }
+  htmlWebpackPluginArray.push(new HtmlWebpackPlugin(htmlConf))
+})
+
+//全局变量 用于输出结果
+global.chunks = chunks
+
 
 module.exports = {
+  entry: entries,
   context: path.resolve(__dirname, '../'),
-  entry: {
-    app: './src/main.js'
-  },
   output: {
     path: config.build.assetsRoot,
     filename: '[name].js',
@@ -34,17 +68,13 @@ module.exports = {
   resolve: {
     extensions: ['.js', '.vue', '.json'],
     alias: {
-      {{#if_eq build "standalone"}}
       'vue$': 'vue/dist/vue.esm.js',
-      {{/if_eq}}
       '@': resolve('src'),
     }
   },
   module: {
     rules: [
-      {{#lint}}
       ...(config.dev.useEslint ? [createLintingRule()] : []),
-      {{/lint}}
       {
         test: /\.vue$/,
         loader: 'vue-loader',
@@ -59,7 +89,7 @@ module.exports = {
         test: /\.(png|jpe?g|gif|svg)(\?.*)?$/,
         loader: 'url-loader',
         options: {
-          limit: 10000,
+          limit: config.base.imageLimit,
           name: utils.assetsPath('img/[name].[hash:7].[ext]')
         }
       },
@@ -67,7 +97,7 @@ module.exports = {
         test: /\.(mp4|webm|ogg|mp3|wav|flac|aac)(\?.*)?$/,
         loader: 'url-loader',
         options: {
-          limit: 10000,
+          limit: config.base.audioLimit,
           name: utils.assetsPath('media/[name].[hash:7].[ext]')
         }
       },
@@ -75,7 +105,7 @@ module.exports = {
         test: /\.(woff2?|eot|ttf|otf)(\?.*)?$/,
         loader: 'url-loader',
         options: {
-          limit: 10000,
+          limit: config.base.fontLimit,
           name: utils.assetsPath('fonts/[name].[hash:7].[ext]')
         }
       }
@@ -92,5 +122,6 @@ module.exports = {
     net: 'empty',
     tls: 'empty',
     child_process: 'empty'
-  }
+  },
+  plugins: htmlWebpackPluginArray
 }
